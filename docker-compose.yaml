@@ -1,0 +1,61 @@
+
+
+
+version: '3.8'
+services:
+  app :
+    build: ./project/
+    container_name: app
+#    command: python manage.py runserver 0.0.0.0:8000
+    command: gunicorn socialnetwork.wsgi:application --bind 0.0.0.0:8000
+#    ports:
+#      - "8000:8000"
+    expose:
+      - 8000
+    volumes:
+      - ./project/:/usr/src/app/
+      - static_files:/usr/src/app/staticfiles
+    depends_on:
+      - db
+    env_file:
+      - ./env/dev.env
+
+  db:
+    image: postgres
+    container_name: postgresdb
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_USER_PASSWORD}
+    restart: always
+    ports:
+      - 5432:5432
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASS}
+    ports:
+      - 5050:80
+    depends_on:
+      - db
+    restart: always
+
+  nginx:
+    build:
+      context: nginx/
+    container_name: nginx
+    volumes:
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+      - static_files:/home/app/staticfiles
+volumes:
+  static_files:
+
+
+
+
+
+
+

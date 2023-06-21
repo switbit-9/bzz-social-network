@@ -1,0 +1,22 @@
+{% extends 'main/base2.html' %}
+{% block title %} Login {% endblock %}
+{% block content %}
+
+
+<div class="col-md-6 offset-md-3">
+    <h1> Sign Up </h1>
+    <br>
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ user_form.as_p }}
+        {{ profile_form.as_p }}
+
+
+        <button type="submit" class="btn btn-success">Update</button>
+
+    </form>
+</div>
+
+<br>
+<br>
+{% endblock %}
