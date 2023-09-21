@@ -1,41 +1,23 @@
 from django.db import models
+from django.contrib.humanize.templatetags import humanize
 from accounts.models import User
-from django.utils import timezone
-# Create your models here.
+from django.utils.timezone import now
 
 
-class Posts(models.Model):
-    user = models.ForeignKey(
-        User,
-        related_name="post",
-        on_delete=models.DO_NOTHING
-    )
-    body = models.CharField(max_length=200)
-    created_at = models.DateTimeField(auto_now_add=True)
-    likes = models.ManyToManyField(User, null=True, blank=True, related_name='bzz_likes')
+class Post(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="posts")
+    body = models.TextField()
+    created_at = models.DateTimeField(default=now)
 
-    class Meta:
-        db_table = 'posts'
-
-    #Keep track of likes
-    def number_of_likes(self):
-        return self.likes.count()
-
-    def __str__(self):
-        return (
-            f"{self.user} "
-            f"({self.created_at:%Y-%m-%d %H:%M}) "
-            f"{self.body}"
-        )
+    def get_date(self):
+        return humanize.naturaltime(self.created_at)
 
 
-class Comments(models.Model):
-    user = models.ForeignKey(User, on_delete=models.DO_NOTHING)
-    post = models.ForeignKey(Posts, on_delete=models.CASCADE, related_name='comments')
-    content = models.CharField()
-    created_at = models.DateTimeField(default=timezone.now)
+class Comment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(default=now)
 
-    class Meta:
-        db_table = 'comments'
-
-
+    def get_date(self):
+        return humanize.naturaltime(self.created_at)

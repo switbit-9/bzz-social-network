@@ -1,170 +1,91 @@
+from django.contrib import messages, auth
+from django.http import HttpResponseRedirect
+
 from django.shortcuts import render, redirect
-from django.urls import reverse, reverse_lazy
-from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
-from django.views.generic import CreateView, FormView, RedirectView, DetailView, UpdateView
-from .models import User, Profile
-from .forms import UserRegistrationForm, ProfileForm, UserLoginForm
-from django.template.loader import get_template
+from django.urls import reverse_lazy
+from django.views.generic import CreateView, FormView, RedirectView
+from .forms import *
 
 
-
-# Create your views here.
 class RegisterView(CreateView):
     model = User
     form_class = UserRegistrationForm
     template_name = 'accounts/register.html'
-    success_url = 'accounts:login'
+    success_url = '/'
+
+    extra_context = {
+        'title': 'Register'
+    }
 
     def dispatch(self, request, *args, **kwargs):
         if self.request.user.is_authenticated:
-            return redirect(self.get_success_url())
+            return HttpResponseRedirect(self.get_success_url())
         return super().dispatch(self.request, *args, **kwargs)
 
     def get_success_url(self):
-        return reverse(self.success_url)
-
-    def get(self, request, *args, **kwargs):
-        user_form = UserRegistrationForm()
-        profile_form = ProfileForm()
-        return render(request, 'accounts/register.html', {'user_form' : user_form, 'profile_form' : profile_form})
+        return self.success_url
 
     def post(self, request, *args, **kwargs):
-        if User.objects.filter(username=request.POST['username']).exists():
-            messages.warning(request, "This username exists! Please retry another ...")
-            return redirect('accounts:register')
         if User.objects.filter(email=request.POST['email']).exists():
-            messages.warning(request, "This email exists")
+            messages.warning(request, 'This email is already taken')
             return redirect('accounts:register')
 
-        user_form = UserRegistrationForm(request.POST or None, request.FILES or None)
-        profile_form = ProfileForm(request.POST or None, request.FILES or None)
+        user_form = UserRegistrationForm(data=request.POST)
 
-        if user_form.is_valid() and profile_form.is_valid():
-            new_user = user_form.save()
-            new_profile_user = Profile.objects.get(user_id=new_user.id)
-            profile_form = ProfileForm(request.POST or None, request.FILES or None, instance=new_profile_user)
-            if profile_form.is_valid():
-                profile_form.save()
-            messages.success(request, "Successfully registered")
-            username = user_form.cleaned_data['username']
-            password = user_form.cleaned_data['password1']
-            user = authenticate(username=username, password=password)
-            login(request, user)
-            return redirect(self.get_success_url())
+        if user_form.is_valid():
+            user = user_form.save(commit=False)
+            password = user_form.cleaned_data.get("password1")
+            user.set_password(password)
+            user.save()
+            messages.success(request, 'Successfully registered')
+            return redirect('accounts:login')
         else:
-            print(user_form.errors + profile_form.errors)
-            return render(request, 'accounts/register.html', {'user_form' : user_form, 'profile_form' : profile_form})
+            print(user_form.errors)
+            return render(request, 'accounts/register.html', {'form': user_form})
+
 
 class LoginView(FormView):
+    success_url = '/'
     form_class = UserLoginForm
-    success_url = ''
     template_name = 'accounts/login.html'
+
+    extra_context = {
+        'title': 'Login'
+    }
 
     def dispatch(self, request, *args, **kwargs):
         if self.request.user.is_authenticated:
-            return redirect(self.get_success_url())
+            return HttpResponseRedirect(self.get_success_url())
         return super().dispatch(self.request, *args, **kwargs)
 
-    def get_success_url(self):
-        return reverse(self.success_url)
+    # @method_decorator(sensitive_post_parameters('password'))
+    # @method_decorator(csrf_protect)
+    # @method_decorator(never_cache)
+    # def dispatch(self, request, *args, **kwargs):
+    #     if self.request.user.is_authenticated:
+    #         redirect_to = self.get_success_url()
+    #         return HttpResponseRedirect(redirect_to)
+    #     # return super().dispatch(self.request, *args, **kwargs)
+    #     return super(Login, self).dispatch(request, *args, **kwargs)
 
-    def get(self, request):
-        return render(request, template_name='accounts/login.html')
+    def get_form_class(self):
+        return self.form_class
 
+    def form_valid(self, form):
+        auth.login(self.request, form.get_user())
+        return HttpResponseRedirect(self.get_success_url())
 
-    def post(self, request, *args, **kwargs):
-        login_form = UserLoginForm(request.POST)
-        if login_form.is_valid():
-            username = login_form.cleaned_data['username']
-            password = login_form.cleaned_data['password']
-            user = authenticate(request, username=username, password=password)
-            if user is None:
-                messages.warning(request, "This user doesn't exist")
-                return redirect('accounts:login')
-            if not user.check_password(password):
-                messages.warning(request, "Password doesn't match")
-                return redirect('accounts:login')
-            if user.is_active is False:
-                messages.warning(request, "This user is not Active")
-                return redirect('accounts:login')
-            return redirect(self.get_success_url())
-
-
-
+    def form_invalid(self, form):
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 class LogoutView(RedirectView):
-    url = reverse_lazy('accounts:login')
+    """
+    Provides users the ability to logout
+    """
+    url = reverse_lazy('core:home')
 
     def get(self, request, *args, **kwargs):
-        logout(request)
-        messages.success(request, "You're logged out")
+        auth.logout(request)
+        messages.success(request, 'You are now logged out')
         return super(LogoutView, self).get(request, *args, **kwargs)
-
-
-
-
-
-class ProfileView(DetailView):
-    model = User
-    template_name = 'accounts/profile.html'
-    slug_field = 'id'
-    slug_url_kwarg = 'id'
-    context_object_name = 'user'
-
-    def get_object(self, queryset=None):
-        return self.model.objects.select_related('profile').prefetch_related("post").get(id=self.kwargs.get(self.slug_url_kwarg))
-
-    def get(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        context =  self.get_context_data(object=self.object)
-        return self.render_to_response(context)
-
-class UpdateProfile(UpdateView):
-    model = Profile
-    template_name = 'accounts/edit_profile.html'
-    context_object_name = 'form'
-    object = None
-    fields = '__all__'
-
-    def get_object(self, queryset=None):
-        return self.request.user.profile
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-    def get(self, request, *args, **kwargs):
-        user_form = UserRegistrationForm(instance=request.user)
-        profile_form = ProfileForm(instance=request.user)
-        context = self.get_context_data(**kwargs)
-        context['user_form'] = user_form
-        context['profile_form'] = profile_form
-        return self.render_to_response(context)
-
-
-
-    def post(self, request, *args, **kwargs):
-        pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
